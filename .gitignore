@@ -1,0 +1,57 @@
+.env.local
+
+# Binaries and executable files
+*.exe
+*.out
+*.app
+*.dll
+*.dylib
+*.so
+*.a
+*.o
+
+# Go build cache and temporary files
+/tmp/
+*.test
+*.prof
+*.log
+*.trace
+*.cover
+
+# Compiled Go binary files
+bin/
+vendor/
+dist/
+
+# Go modules cache (do not ignore `go.mod` and `go.sum`)
+/go.work
+/go.work.sum
+
+# Editor and IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+
+# Logs and debug files
+debug/
+logs/
+*.log
+
+# Coverage reports
+coverage.out
+*.coverprofile
+
+# Dependency directories (if vendoring is used)
+/vendor/
+
+# Docker and Kubernetes
+docker-compose.override.yml
+*.dockerignore
+
+# macOS system files
+.DS_Store
+.AppleDouble
+.LSOverride
+
