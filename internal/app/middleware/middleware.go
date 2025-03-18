@@ -8,6 +8,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
+
+	"go-monolith/pkg/logger"
 )
 
 const (
@@ -139,20 +141,25 @@ func SecurityHeaders() gin.HandlerFunc {
 }
 
 // Recovery returns a gin middleware for recovering from panics
-func Recovery(logger *zap.Logger) gin.HandlerFunc {
+func Recovery(logger *logger.Logger) gin.HandlerFunc {
+	ginRecovery := gin.Recovery()
 	return func(c *gin.Context) {
 		defer func() {
 			if err := recover(); err != nil {
-				logger.Error("panic recovered",
+				// Log with our logger first
+				logger.Error(c.Request.Context(), "panic recovered",
 					zap.Any("error", err),
 					zap.String("request_id", c.GetString(ContextKeyRequestID)),
+					zap.String("path", c.Request.URL.Path),
+					zap.String("method", c.Request.Method),
+					zap.String("client_ip", c.ClientIP()),
 				)
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-					"error": "internal server error",
-				})
+				// Let gin's recovery handle the rest
+				c.Next()
 			}
 		}()
-		c.Next()
+		// Use gin's recovery middleware
+		ginRecovery(c)
 	}
 }
 

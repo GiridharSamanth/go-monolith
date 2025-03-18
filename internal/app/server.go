@@ -38,8 +38,8 @@ func NewServer(db *gorm.DB) *Server {
 	router := gin.New() // Use New() instead of Default() as we'll add our own middleware
 
 	// Add middlewares
-	router.Use(gin.Recovery())      // Use gin's built-in recovery middleware
-	router.Use(appctx.Middleware()) // Add context middleware first
+	router.Use(middleware.Recovery(container.Config.Logger)) // Recovery should be first to catch all panics
+	router.Use(appctx.Middleware())                          // Context middleware early in chain
 	router.Use(logger.HTTPLogMiddleware(container.Config.Logger, container.Config.Server.EnableHTTPLogs))
 	router.Use(middleware.CORS())
 	router.Use(middleware.SecurityHeaders())
@@ -58,37 +58,15 @@ func NewServer(db *gorm.DB) *Server {
 
 func (s *Server) SetupRoutes() {
 	// Initialize auth components (using mocks for now)
-	tokenExtractor := auth.NewMockTokenExtractor()
 	permissionVerifier := auth.NewMockPermissionVerifier()
 
-	// Public routes (no authentication required)
-	public := s.router.Group("")
-	{
-		// Health check
-		public.GET("/health", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{"status": "ok"})
-		})
+	// Setup public routes (no authentication required)
+	routes.SetupPublicRoutes(s.router)
 
-		// Setup public routes with handlers from container
-		routes.SetupPublicRoutes(public, s.container.Handlers)
-	}
-
-	// Protected routes (authentication required)
-	protected := s.router.Group("")
-	protected.Use(auth.AuthMiddleware(tokenExtractor))
-	{
-		// Story routes
-		storyRoutes := protected.Group("/stories")
-		{
-			// Example of using permission middleware
-			storyRoutes.POST("", auth.RequirePermission(permissionVerifier, "create", "story"))
-			storyRoutes.PUT("/:id", auth.RequirePermission(permissionVerifier, "update", "story"))
-			storyRoutes.DELETE("/:id", auth.RequirePermission(permissionVerifier, "delete", "story"))
-		}
-
-		// Setup other protected routes with handlers from container
-		routes.SetupProtectedRoutes(protected, s.container.Handlers)
-	}
+	// Setup protected routes (authentication required)
+	protectedRouter := s.router.Group("")
+	protectedRouter.Use(auth.AuthMiddleware())
+	routes.SetupProtectedRoutes(protectedRouter, s.container.Handlers, permissionVerifier)
 }
 
 func (s *Server) Start() error {

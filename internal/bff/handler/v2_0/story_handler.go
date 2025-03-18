@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"go-monolith/internal/bff/handler/builder"
 	"go-monolith/internal/bff/service"
 )
 
@@ -37,8 +38,15 @@ func (h *StoryHandler) GetStory(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"story":  story,
-		"author": author,
-	})
+	responseStructure := builder.ResponseStructure{
+		"id":      true,
+		"title":   true,
+		"content": true,
+		"author": map[string]interface{}{
+			"name":            true,
+			"profileImageUrl": true,
+		},
+	}
+	storyResponse := builder.BuildStoryResponse(story, author, responseStructure)
+	c.JSON(http.StatusOK, storyResponse)
 }
