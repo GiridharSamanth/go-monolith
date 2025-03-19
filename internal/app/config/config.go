@@ -77,14 +77,21 @@ func NewConfig() (*Config, error) {
 		return nil, err
 	}
 
+	serverPort := os.Getenv("SERVER_PORT")
+	if serverPort == "" {
+		return nil, errors.New("SERVER_PORT is required")
+	}
+
+	serverConfig := ServerConfig{
+		Port:           ":" + serverPort,
+		EnableHTTPLogs: logConfig.EnableHTTPLogs,
+	}
+
 	return &Config{
 		Environment: env,
 		Logger:      logConfig,
-		Server: ServerConfig{
-			Port:           os.Getenv("PORT"),
-			EnableHTTPLogs: true,
-		},
-		DB: dbConfig,
+		Server:      serverConfig,
+		DB:          dbConfig,
 	}, nil
 }
 
@@ -95,7 +102,6 @@ func (c *DBConfig) DSN() string {
 
 // getEnvOrDefault returns environment variable value or default if not set
 func getEnvOrDefault(key, defaultValue string) string {
-	fmt.Println("key", key, "value", os.Getenv(key))
 	if value := os.Getenv(key); value != "" {
 		return value
 	}

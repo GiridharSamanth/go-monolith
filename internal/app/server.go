@@ -38,12 +38,14 @@ func NewServer() *Server {
 	// Add middlewares
 	router.Use(middleware.Recovery(container.Logger)) // Recovery should be first to catch all panics
 	router.Use(appctx.Middleware())                   // Context middleware early in chain
-	router.Use(middleware.RequestLogger(container.Logger))
+	if container.Config.Server.EnableHTTPLogs {
+		router.Use(middleware.RequestLogger(container.Logger))
+	}
 	router.Use(middleware.CORS())
 	router.Use(middleware.SecurityHeaders())
 
 	server := &http.Server{
-		Addr:    ":8080",
+		Addr:    container.Config.Server.Port,
 		Handler: router,
 	}
 

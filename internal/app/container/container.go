@@ -49,8 +49,8 @@ func NewContainer() *Container {
 	}
 
 	// Initialize modules
-	storyModule := story.NewModule(db)
-	authorModule := author.NewModule(db)
+	storyModule := story.NewModule(db, log)
+	authorModule := author.NewModule(db, log)
 
 	// Initialize repositories
 	storyRepo := data.NewStoryProvider(storyModule.StoryService)
