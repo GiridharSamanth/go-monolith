@@ -16,6 +16,7 @@ import (
 	routes "go-monolith/internal/bff/route"
 	"go-monolith/pkg/auth"
 	appctx "go-monolith/pkg/context"
+	"go-monolith/pkg/metrics"
 )
 
 type Server struct {
@@ -41,6 +42,7 @@ func NewServer() *Server {
 	if container.Config.Server.EnableHTTPLogs {
 		router.Use(middleware.RequestLogger(container.Logger))
 	}
+	router.Use(metrics.HTTPMetricsMiddleware(container.Metrics)) // Add metrics middleware
 	router.Use(middleware.CORS())
 	router.Use(middleware.SecurityHeaders())
 

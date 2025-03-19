@@ -4,14 +4,17 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 
 	"go-monolith/pkg/logger"
+	"go-monolith/pkg/metrics"
 )
 
 // Config holds all configuration for the application
 type Config struct {
 	Environment string
 	Logger      logger.Config
+	Metrics     metrics.Config
 	Server      ServerConfig
 	DB          DBConfig
 }
@@ -29,6 +32,15 @@ type DBConfig struct {
 	User     string
 	Password string
 	DBName   string
+}
+
+// MetricsConfig holds metrics configuration
+type MetricsConfig struct {
+	Host     string  `env:"METRICS_HOST" envDefault:"localhost"`
+	Port     int     `env:"METRICS_PORT" envDefault:"8125"`
+	Prefix   string  `env:"METRICS_PREFIX" envDefault:"go-monolith"`
+	Sampling float64 `env:"METRICS_SAMPLING" envDefault:"1.0"`
+	Enabled  bool    `env:"METRICS_ENABLED" envDefault:"true"`
 }
 
 // validate checks if all required fields are set
@@ -65,6 +77,25 @@ func NewConfig() (*Config, error) {
 		Format:         getEnvOrDefault("LOG_FORMAT", "console"),
 	}
 
+	// Create metrics config
+	metricsPort, err := strconv.Atoi(getEnvOrDefault("STATSD_PORT", "8125"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid STATSD_PORT: %w", err)
+	}
+
+	sampling, err := strconv.ParseFloat(getEnvOrDefault("STATSD_SAMPLING", "1.0"), 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid STATSD_SAMPLING: %w", err)
+	}
+
+	metricsConfig := metrics.Config{
+		Host:     getEnvOrDefault("STATSD_HOST", "localhost"),
+		Port:     metricsPort,
+		Prefix:   getEnvOrDefault("STATSD_PREFIX", "go-monolith"),
+		Sampling: sampling,
+		Enabled:  getEnvOrDefault("METRICS_ENABLED", "true") == "true",
+	}
+
 	dbConfig := DBConfig{
 		User:     os.Getenv("DB_USER"),
 		Password: os.Getenv("DB_PASSWORD"),
@@ -90,6 +121,7 @@ func NewConfig() (*Config, error) {
 	return &Config{
 		Environment: env,
 		Logger:      logConfig,
+		Metrics:     metricsConfig,
 		Server:      serverConfig,
 		DB:          dbConfig,
 	}, nil
