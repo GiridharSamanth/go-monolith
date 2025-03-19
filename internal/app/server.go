@@ -10,14 +10,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 
 	"go-monolith/internal/app/container"
 	"go-monolith/internal/app/middleware"
 	routes "go-monolith/internal/bff/route"
 	"go-monolith/pkg/auth"
 	appctx "go-monolith/pkg/context"
-	"go-monolith/pkg/logger"
 )
 
 type Server struct {
@@ -26,9 +24,9 @@ type Server struct {
 	server    *http.Server
 }
 
-func NewServer(db *gorm.DB) *Server {
+func NewServer() *Server {
 	// Initialize container first to get logger
-	container := container.NewContainer(db)
+	container := container.NewContainer()
 
 	// Set Gin mode based on environment
 	if os.Getenv("APP_ENV") == "production" {
@@ -38,9 +36,9 @@ func NewServer(db *gorm.DB) *Server {
 	router := gin.New() // Use New() instead of Default() as we'll add our own middleware
 
 	// Add middlewares
-	router.Use(middleware.Recovery(container.Config.Logger)) // Recovery should be first to catch all panics
-	router.Use(appctx.Middleware())                          // Context middleware early in chain
-	router.Use(logger.HTTPLogMiddleware(container.Config.Logger, container.Config.Server.EnableHTTPLogs))
+	router.Use(middleware.Recovery(container.Logger)) // Recovery should be first to catch all panics
+	router.Use(appctx.Middleware())                   // Context middleware early in chain
+	router.Use(middleware.RequestLogger(container.Logger))
 	router.Use(middleware.CORS())
 	router.Use(middleware.SecurityHeaders())
 

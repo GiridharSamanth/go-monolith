@@ -7,7 +7,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"go.uber.org/zap"
 
 	"go-monolith/pkg/logger"
 )
@@ -20,38 +19,19 @@ const (
 )
 
 // RequestLogger returns a gin middleware for logging requests using zap
-func RequestLogger(logger *zap.Logger) gin.HandlerFunc {
+func RequestLogger(Logger logger.Logger) gin.HandlerFunc {
+	httpLogger := logger.NewHTTPLogger(Logger)
+
 	return func(c *gin.Context) {
 		start := time.Now()
-		path := c.Request.URL.Path
-		query := c.Request.URL.RawQuery
 
-		// Get request ID from header or generate new one
-		requestID := c.GetHeader("X-Request-ID")
-		if requestID == "" {
-			requestID = uuid.New().String()
-		}
-		c.Set(ContextKeyRequestID, requestID)
+		// Create Gin request adapter
+		req := logger.NewGinRequest(c)
 
 		c.Next()
 
-		// Log after request is processed
-		latency := time.Since(start)
-		status := c.Writer.Status()
-
-		if query != "" {
-			path = path + "?" + query
-		}
-
-		logger.Info("request completed",
-			zap.String("request_id", requestID),
-			zap.String("method", c.Request.Method),
-			zap.String("path", path),
-			zap.Int("status", status),
-			zap.Duration("latency", latency),
-			zap.String("client_ip", c.ClientIP()),
-			zap.String("user_agent", c.Request.UserAgent()),
-		)
+		// Log request after processing
+		httpLogger.LogRequest(req, start)
 	}
 }
 
@@ -141,24 +121,23 @@ func SecurityHeaders() gin.HandlerFunc {
 }
 
 // Recovery returns a gin middleware for recovering from panics
-func Recovery(logger *logger.Logger) gin.HandlerFunc {
+func Recovery(log logger.Logger) gin.HandlerFunc {
 	ginRecovery := gin.Recovery()
 	return func(c *gin.Context) {
 		defer func() {
 			if err := recover(); err != nil {
 				// Log with our logger first
-				logger.Error(c.Request.Context(), "panic recovered",
-					zap.Any("error", err),
-					zap.String("request_id", c.GetString(ContextKeyRequestID)),
-					zap.String("path", c.Request.URL.Path),
-					zap.String("method", c.Request.Method),
-					zap.String("client_ip", c.ClientIP()),
+				log.Error(c.Request.Context(), "panic recovered",
+					logger.Any("error", err),
+					logger.String("request_id", c.GetString(ContextKeyRequestID)),
+					logger.String("path", c.Request.URL.Path),
+					logger.String("method", c.Request.Method),
+					logger.String("client_ip", c.ClientIP()),
 				)
 				// Let gin's recovery handle the rest
 				c.Next()
 			}
 		}()
-		// Use gin's recovery middleware
 		ginRecovery(c)
 	}
 }

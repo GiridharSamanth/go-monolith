@@ -1,18 +1,17 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"go-monolith/pkg/logger"
-
-	"github.com/joho/godotenv"
 )
 
 // Config holds all configuration for the application
 type Config struct {
 	Environment string
-	Logger      *logger.Logger
+	Logger      logger.Config
 	Server      ServerConfig
 	DB          DBConfig
 }
@@ -32,17 +31,33 @@ type DBConfig struct {
 	DBName   string
 }
 
-// NewConfig creates a new configuration instance
-func NewConfig() (*Config, error) {
-	// Load .env.local file only in development environment
-	env := getEnvOrDefault("APP_ENV", "development")
-	if env == "development" {
-		if err := godotenv.Load(".env.local"); err != nil {
-			return nil, fmt.Errorf("error loading .env.local file: %w", err)
-		}
+// validate checks if all required fields are set
+func (c *DBConfig) validate() error {
+	required := map[string]string{
+		"Host":     c.Host,
+		"Port":     c.Port,
+		"User":     c.User,
+		"Password": c.Password,
+		"DBName":   c.DBName,
 	}
 
-	// Initialize logger first
+	for field, value := range required {
+		if value == "" {
+			return fmt.Errorf("database %s is required", field)
+		}
+	}
+	return nil
+}
+
+// NewConfig creates a new configuration instance
+func NewConfig() (*Config, error) {
+	// Load environment variables
+	env := os.Getenv("APP_ENV")
+	if env == "" {
+		return nil, errors.New("APP_ENV is required")
+	}
+
+	// Create logger config
 	logConfig := logger.Config{
 		Environment:    env,
 		EnableHTTPLogs: getEnvOrDefault("ENABLE_HTTP_LOGS", "true") == "true",
@@ -50,29 +65,27 @@ func NewConfig() (*Config, error) {
 		Format:         getEnvOrDefault("LOG_FORMAT", "console"),
 	}
 
-	log, err := logger.Initialize(logConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize logger: %w", err)
+	dbConfig := DBConfig{
+		User:     os.Getenv("DB_USER"),
+		Password: os.Getenv("DB_PASSWORD"),
+		Host:     os.Getenv("DB_HOST"),
+		Port:     os.Getenv("DB_PORT"),
+		DBName:   os.Getenv("DB_NAME"),
 	}
 
-	// Create config
-	config := &Config{
-		Environment: logConfig.Environment,
-		Logger:      log,
+	if err := dbConfig.validate(); err != nil {
+		return nil, err
+	}
+
+	return &Config{
+		Environment: env,
+		Logger:      logConfig,
 		Server: ServerConfig{
-			Port:           getEnvOrDefault("SERVER_PORT", "8080"),
-			EnableHTTPLogs: logConfig.EnableHTTPLogs,
+			Port:           os.Getenv("PORT"),
+			EnableHTTPLogs: true,
 		},
-		DB: DBConfig{
-			Host:     getEnvOrDefault("DB_HOST", "localhost"),
-			Port:     getEnvOrDefault("DB_PORT", "5432"),
-			User:     getEnvOrDefault("DB_USER", "postgres"),
-			Password: getEnvOrDefault("DB_PASSWORD", "postgres"),
-			DBName:   getEnvOrDefault("DB_NAME", "monolith"),
-		},
-	}
-
-	return config, nil
+		DB: dbConfig,
+	}, nil
 }
 
 // DSN returns the database connection string
@@ -82,6 +95,7 @@ func (c *DBConfig) DSN() string {
 
 // getEnvOrDefault returns environment variable value or default if not set
 func getEnvOrDefault(key, defaultValue string) string {
+	fmt.Println("key", key, "value", os.Getenv(key))
 	if value := os.Getenv(key); value != "" {
 		return value
 	}

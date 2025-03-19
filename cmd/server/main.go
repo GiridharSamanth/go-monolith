@@ -2,29 +2,24 @@ package main
 
 import (
 	"log"
-
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
+	"os"
 
 	"go-monolith/internal/app"
-	"go-monolith/internal/app/config"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Load configuration
-	cfg, err := config.NewConfig()
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
-
-	// Initialize GORM
-	db, err := gorm.Open(mysql.Open(cfg.DB.DSN()), &gorm.Config{})
-	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+	// Load .env.local file only in development/local environment
+	env := os.Getenv("APP_ENV")
+	if env == "" || env == "development" || env == "local" {
+		if err := godotenv.Load(".env.local"); err != nil {
+			log.Printf("Warning: Error loading .env.local file: %v", err)
+		}
 	}
 
 	// Create and setup server
-	server := app.NewServer(db)
+	server := app.NewServer()
 	server.SetupRoutes()
 
 	// Start the server

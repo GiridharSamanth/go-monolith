@@ -8,15 +8,16 @@ import (
 	"go-monolith/internal/modules/author"
 	"go-monolith/internal/modules/story"
 	"go-monolith/pkg/logger"
+	"log"
 
-	"go.uber.org/zap"
+	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
 // Container holds all application dependencies
 type Container struct {
 	Config       *config.Config
-	Logger       *logger.Logger
+	Logger       logger.Logger // Interface type for dependency inversion and easier testing/mocking
 	DB           *gorm.DB
 	StoryModule  *story.Module
 	AuthorModule *author.Module
@@ -27,20 +28,24 @@ type Container struct {
 }
 
 // NewContainer creates a new dependency container
-func NewContainer(db *gorm.DB) *Container {
+func NewContainer() *Container {
 	// Initialize config
 	cfg, err := config.NewConfig()
 	if err != nil {
-		// Use default logger to log error and create default config
-		logger.Default().Error(nil, "Failed to initialize config, using defaults", zap.Error(err))
-		cfg = &config.Config{
-			Environment: "development",
-			Logger:      logger.Default(),
-			Server: config.ServerConfig{
-				Port:           "8080",
-				EnableHTTPLogs: true,
-			},
-		}
+		log.Fatalf("Failed to initialize config: %v", err)
+	}
+
+	// Initialize GORM
+	db, err := gorm.Open(mysql.Open(cfg.DB.DSN()), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
+	// Initialize logger
+	log, err := logger.Initialize(cfg.Logger)
+	if err != nil {
+		// Fallback to default logger
+		log = logger.Default()
 	}
 
 	// Initialize modules
@@ -52,14 +57,14 @@ func NewContainer(db *gorm.DB) *Container {
 	authorRepo := data.NewAuthorProvider(authorModule.AuthorService)
 
 	// Initialize BFF service
-	storyService := service.NewStoryService(storyRepo, authorRepo, cfg.Logger)
+	storyService := service.NewStoryService(storyRepo, authorRepo, log)
 
 	// Initialize handlers
 	handlers := handler.NewHandlers(storyService)
 
 	return &Container{
 		Config:       cfg,
-		Logger:       cfg.Logger,
+		Logger:       log,
 		DB:           db,
 		StoryModule:  storyModule,
 		AuthorModule: authorModule,

@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var defaultLogger *Logger
+var defaultLogger Logger
 
 // Config holds logger configuration
 type Config struct {
@@ -20,13 +20,53 @@ type Config struct {
 	Format         string // "json" or "console"
 }
 
-// Logger wraps zap logger with additional context methods
-type Logger struct {
+// Field represents a key-value pair for structured logging
+type Field struct {
+	Key   string
+	Value interface{}
+}
+
+// Logger interface defines the logging methods
+type Logger interface {
+	Debug(ctx context.Context, msg string, fields ...Field)
+	Info(ctx context.Context, msg string, fields ...Field)
+	Warn(ctx context.Context, msg string, fields ...Field)
+	Error(ctx context.Context, msg string, fields ...Field)
+	Fatal(ctx context.Context, msg string, fields ...Field)
+}
+
+// zapLogger implements Logger interface using zap
+type zapLogger struct {
 	*zap.Logger
 }
 
+// Helper functions to create fields
+func String(key string, value string) Field {
+	return Field{Key: key, Value: value}
+}
+
+func Int(key string, value int) Field {
+	return Field{Key: key, Value: value}
+}
+
+func Int64(key string, value int64) Field {
+	return Field{Key: key, Value: value}
+}
+
+func Float64(key string, value float64) Field {
+	return Field{Key: key, Value: value}
+}
+
+func Bool(key string, value bool) Field {
+	return Field{Key: key, Value: value}
+}
+
+func Any(key string, value interface{}) Field {
+	return Field{Key: key, Value: value}
+}
+
 // Initialize creates a new logger instance with the given configuration
-func Initialize(config Config) (*Logger, error) {
+func Initialize(config Config) (Logger, error) {
 	// Set log level
 	level := zap.InfoLevel
 	if config.LogLevel != "" {
@@ -57,18 +97,18 @@ func Initialize(config Config) (*Logger, error) {
 	)
 
 	// Create logger
-	zapLogger := zap.New(core)
+	zl := zap.New(core)
 	if config.Environment != "production" {
-		zapLogger = zapLogger.WithOptions(zap.Development())
+		zl = zl.WithOptions(zap.Development())
 	}
 
-	logger := &Logger{zapLogger}
+	logger := &zapLogger{zl}
 	defaultLogger = logger
 	return logger, nil
 }
 
 // Default returns the global logger instance
-func Default() *Logger {
+func Default() Logger {
 	if defaultLogger == nil {
 		// Initialize with default development configuration
 		cfg := Config{
@@ -80,8 +120,8 @@ func Default() *Logger {
 		logger, err := Initialize(cfg)
 		if err != nil {
 			// Fallback to basic development logger
-			zapLogger, _ := zap.NewDevelopment()
-			defaultLogger = &Logger{zapLogger}
+			zl, _ := zap.NewDevelopment()
+			defaultLogger = &zapLogger{zl}
 		} else {
 			defaultLogger = logger
 		}
@@ -89,8 +129,30 @@ func Default() *Logger {
 	return defaultLogger
 }
 
-// WithContext returns a logger with context values
-func (l *Logger) WithContext(ctx context.Context) *zap.Logger {
+// convertFields converts our Field type to zap.Field
+func convertFields(fields ...Field) []zap.Field {
+	zapFields := make([]zap.Field, len(fields))
+	for i, f := range fields {
+		switch v := f.Value.(type) {
+		case string:
+			zapFields[i] = zap.String(f.Key, v)
+		case int:
+			zapFields[i] = zap.Int(f.Key, v)
+		case int64:
+			zapFields[i] = zap.Int64(f.Key, v)
+		case float64:
+			zapFields[i] = zap.Float64(f.Key, v)
+		case bool:
+			zapFields[i] = zap.Bool(f.Key, v)
+		default:
+			zapFields[i] = zap.Any(f.Key, v)
+		}
+	}
+	return zapFields
+}
+
+// withContext returns a zap logger with context values
+func (l *zapLogger) withContext(ctx context.Context) *zap.Logger {
 	if ctx == nil {
 		return l.Logger
 	}
@@ -122,26 +184,26 @@ func (l *Logger) WithContext(ctx context.Context) *zap.Logger {
 }
 
 // Debug logs a debug message with context
-func (l *Logger) Debug(ctx context.Context, msg string, fields ...zap.Field) {
-	l.WithContext(ctx).Debug(msg, fields...)
+func (l *zapLogger) Debug(ctx context.Context, msg string, fields ...Field) {
+	l.withContext(ctx).Debug(msg, convertFields(fields...)...)
 }
 
 // Info logs an info message with context
-func (l *Logger) Info(ctx context.Context, msg string, fields ...zap.Field) {
-	l.WithContext(ctx).Info(msg, fields...)
+func (l *zapLogger) Info(ctx context.Context, msg string, fields ...Field) {
+	l.withContext(ctx).Info(msg, convertFields(fields...)...)
 }
 
 // Warn logs a warning message with context
-func (l *Logger) Warn(ctx context.Context, msg string, fields ...zap.Field) {
-	l.WithContext(ctx).Warn(msg, fields...)
+func (l *zapLogger) Warn(ctx context.Context, msg string, fields ...Field) {
+	l.withContext(ctx).Warn(msg, convertFields(fields...)...)
 }
 
 // Error logs an error message with context
-func (l *Logger) Error(ctx context.Context, msg string, fields ...zap.Field) {
-	l.WithContext(ctx).Error(msg, fields...)
+func (l *zapLogger) Error(ctx context.Context, msg string, fields ...Field) {
+	l.withContext(ctx).Error(msg, convertFields(fields...)...)
 }
 
 // Fatal logs a fatal message with context
-func (l *Logger) Fatal(ctx context.Context, msg string, fields ...zap.Field) {
-	l.WithContext(ctx).Fatal(msg, fields...)
+func (l *zapLogger) Fatal(ctx context.Context, msg string, fields ...Field) {
+	l.withContext(ctx).Fatal(msg, convertFields(fields...)...)
 }
