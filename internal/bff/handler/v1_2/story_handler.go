@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -28,7 +27,6 @@ func NewStoryHandler(ss *service.StoryService) *StoryHandler {
 // GetStory handles GET /v1.2/stories?id=123
 func (h *StoryHandler) GetStory(c *gin.Context) {
 	storyID := c.Query("id")
-	fmt.Println("GetStory", "storyID", storyID)
 	if storyID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "story ID is required"})
 		return
